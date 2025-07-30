@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>flashcard on DSE PastPaper Answers</title>
+    <link>http://localhost:1313/en/flashcard/</link>
+    <description>Recent content in flashcard on DSE PastPaper Answers</description>
+    <generator>Hugo</generator>
+    <language>en</language>
+    <lastBuildDate>Fri, 27 Oct 2023 00:00:00 +0000</lastBuildDate>
+    <atom:link href="http://localhost:1313/en/flashcard/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>Set up Flash card study plan</title>
+      <link>http://localhost:1313/en/flashcard/flashcard/</link>
+      <pubDate>Fri, 27 Oct 2023 00:00:00 +0000</pubDate>
+      <guid>http://localhost:1313/en/flashcard/flashcard/</guid>
+      <description>&lt;p&gt;Begin your study by narrow down you will study through &lt;strong&gt;Subjects&lt;/strong&gt;, &lt;strong&gt;Exam&lt;/strong&gt; (CE/AL/DSE), &lt;strong&gt;Language&lt;/strong&gt;, &lt;strong&gt;Year&lt;/strong&gt;, &lt;strong&gt;Paper&lt;/strong&gt;, &lt;strong&gt;Section&lt;/strong&gt;, &lt;strong&gt;Tags&lt;/strong&gt; (Topic), etc.&lt;/p&gt;&#xA;&lt;p&gt;Also set the amount of card you study per day.&lt;/p&gt;</description>
+    </item>
+  </channel>
+</rss>

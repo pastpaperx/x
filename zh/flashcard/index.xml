@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>flashcard on DSE 歷屆試題解答</title>
+    <link>http://localhost:1313/zh/flashcard/</link>
+    <description>Recent content in flashcard on DSE 歷屆試題解答</description>
+    <generator>Hugo</generator>
+    <language>zh</language>
+    <lastBuildDate>Fri, 27 Oct 2023 00:00:00 +0000</lastBuildDate>
+    <atom:link href="http://localhost:1313/zh/flashcard/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>Set up Flash card study plan</title>
+      <link>http://localhost:1313/zh/flashcard/_index.en-copy/</link>
+      <pubDate>Fri, 27 Oct 2023 00:00:00 +0000</pubDate>
+      <guid>http://localhost:1313/zh/flashcard/_index.en-copy/</guid>
+      <description>&lt;p&gt;Begin your study by narrow down you will study through &lt;strong&gt;Subjects&lt;/strong&gt;(required), &lt;strong&gt;Exam&lt;/strong&gt; (CE/AL/DSE), &lt;strong&gt;Language&lt;/strong&gt;, &lt;strong&gt;Year&lt;/strong&gt;, &lt;strong&gt;Paper&lt;/strong&gt;, &lt;strong&gt;Section&lt;/strong&gt;, &lt;strong&gt;Tags&lt;/strong&gt; (Topic), etc.&lt;/p&gt;&#xA;&lt;p&gt;Also, the amount of card you study per day can be changed ( default is &lt;strong&gt;20&lt;/strong&gt; per day).&lt;/p&gt;&#xA;&lt;p&gt;Each subject can have ONE(1) &lt;strong&gt;Study Plan&lt;/strong&gt; at a time, while &lt;strong&gt;Progress&lt;/strong&gt; (marking a question hard or easy) is stored per unique question and independent from the Plan.&lt;/p&gt;&#xA;&lt;p&gt;Changing &lt;strong&gt;Study Plan&lt;/strong&gt; will not clean &lt;strong&gt;Progress&lt;/strong&gt;, i.e. Cards/Questions you marked as &lt;em&gt;easy&lt;/em&gt; will still appear less often.&lt;/p&gt;</description>
+    </item>
+  </channel>
+</rss>
