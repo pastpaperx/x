@@ -12,3 +12,15 @@ mermaid/
 images/*.png
 images/*.jpg
 **/*Zone.Identifier
+js/auto-complete.js
+js/clipboard.min.js
+js/featherlight.min.js
+js/highlight.pack.js
+js/hugo-learn.js
+js/jquery.sticky.js
+js/learn.js
+js/lunr.min.js
+js/modernizr.custom-3.6.0.js
+js/perfect-scrollbar.jquery.min.js
+js/perfect-scrollbar.min.js
+js/search.js
