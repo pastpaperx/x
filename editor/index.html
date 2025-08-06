@@ -1,0 +1,1495 @@
+<!DOCTYPE html>
+<html data-theme="dark">
+	<head>
+		<title>Question Editor</title>
+		<script type="text/javascript" src="scripts/f.js"></script>
+		<script type="text/javascript" src="scripts/j.js"></script>
+		<script type="text/javascript" src="scripts/z.js"></script>
+		<script type="text/javascript" src="scripts/s.js"></script>
+		<script type="module" src="scripts/p.js"></script>
+		<script type="text/javascript">
+			const module = {};
+			let subTags = [];
+			let mode_init = false;
+			let pageData = {
+				exam: '',
+				subject: "",
+				tags: [],
+				year: "",
+				lang: "na",
+				paper: "",
+				section: "",
+				question: 0,
+				q_file: "",
+				q_caps: [],
+				a_file: "",
+				a_caps: [],
+				videos: [],
+				a_md: ""
+			};
+
+			const syncVideoKeyword = () => {
+				let kw = `DSE ${pageData.subject} ${pageData.year}`;
+				if (pageData.paper) {
+					kw += ` Paper ${pageData.paper}`;
+				}
+				if (pageData.section) {
+					kw += ` Section ${pageData.section}`;
+				}
+				if (pageData.question) {
+					kw += ` Question ${pageData.question}`;
+				}
+				$("#video-keyword").val(kw);
+			};
+
+			const _pullTagFrom = (u, f) => {
+				$.ajax({
+					url: u,
+					dataType: "text",
+					method: "GET",
+					processd_aata: false
+				})
+					.done((d) => {
+						const arr = String(d).split(/[\r\n]+/);
+						if (arr && arr.length > 0) {
+							subTags = arr;
+							// console.log('subTags',subTags)
+							return;
+						}
+						// try next
+						if (typeof f === "function") f();
+					})
+					.fail(() => {
+						if (typeof f === "function") f();
+					});
+			};
+
+			const pullTags = () => {
+				const base =
+					"https://raw.githubusercontent.com/dse-life-data/pastpaper.x/refs/heads/main/dse/";
+				const p1 = base + `${pageData.subject}/${pageData.lang}/by-tag/all.txt`;
+				const p2 = base + `${pageData.subject}/eng/by-tag/all.txt`;
+				_pullTagFrom(p1, () => {
+					if (p1 != p2) _pullTagFrom(p2);
+				});
+			};
+
+			const mixTags = () => {
+				const na = [...new Set([...subTags, ...pageData.tags])];
+				na.sort();
+				return na;
+			};
+
+			const saveZipData = () => {
+				pageData.exam = $('#q-exam').val().toLowerCase();
+				if (!pageData.exam) {
+					alert("exam required!");
+					return;
+				} else if (pageData.exam != 'ce' && pageData.exam != 'al' && pageData.exam != 'dse' ) {
+					alert('exam can only be CE/AL/DSE');
+					return;
+				}
+				if (!pageData.subject) {
+					alert("subject required!");
+					return;
+				}
+				if (!pageData.exam) {
+					alert("exam required!");
+					return;
+				}
+				if (!pageData.year) {
+					alert("year required!");
+					return;
+				}
+				if (!pageData.lang) {
+					alert("lang required! (select n/a if only have one language)");
+					return;
+				}
+				if (!pageData.paper) {
+					alert("paper required!");
+					return;
+				}
+				if (!pageData.section) {
+					alert("section required!");
+					return;
+				}
+				if (!pageData.q_file || !pageData.q_caps) {
+					alert("question capture required!");
+					return;
+				}
+				if (!pageData.question) {
+					alert("Question Number required!");
+					return;
+				}
+				const adv = $('#adv_txt').val();
+				if(adv.length > 0 && adv.length - adv.replaceAll(',', '').length == 3) {
+					const slot = $('#adv_slot').val();
+					pageData.adv = adv+';;'+slot;
+
+				}
+				const dat = JSON.stringify(pageData);
+
+				const filePrefix = `y${pageData.year}-l${pageData.lang}-p${pageData.paper}-s${pageData.section}-q${pageData.question}`;
+				const coreFile = `${pageData.subject}/${pageData.lang}/qa/${filePrefix}.json`;
+				const imgFolder = `.internal-ai-image/${pageData.subject}/${pageData.lang}/qa/${filePrefix}/`;
+
+				const z1 = new JSZip();
+				const z = z1.folder(pageData.exam);
+				const folder = z.folder(pageData.subject).folder(pageData.lang);
+				const byPS = folder.folder(
+					`by-paper-section/p${pageData.paper}/s${pageData.section}`
+				);
+				byPS.file(`${filePrefix}.txt`, coreFile);
+
+				const byTag = folder.folder("by-tag");
+				for (let i = 0; i < pageData.tags.length; i++) {
+					const t = pageData.tags[i];
+					byTag.file(`${t}/${filePrefix}.txt`, coreFile);
+				}
+
+				byTag.file("all.txt", mixTags().join("\r\n"));
+
+				folder.file(`by-year/${pageData.year}/${filePrefix}.txt`, coreFile);
+
+				z.file(coreFile, dat);
+
+				const pp = [];
+
+				$("#preview-question-holder canvas").each((i, e) => {
+					const x = e.getContext("2d");
+					const imgFile = imgFolder + "q" + i + ".png";
+
+					const p = new Promise((r) => {
+						e.toBlob((b) => {
+							z.file(imgFile, b);
+							r();
+							// console.log("resolve", i, imgFile);
+						}, "image/png");
+					});
+					pp[pp.length] = p;
+				});
+
+				$("#preview-answer-holder canvas").each((i, e) => {
+					const x = e.getContext("2d");
+					const imgFile = imgFolder + "a" + i + ".png";
+
+					const p = new Promise((r) => {
+						e.toBlob((b) => {
+							z.file(imgFile, b);
+							r();
+							// console.log("resolve", i, imgFile);
+						}, "image/png");
+					});
+					pp[pp.length] = p;
+				});
+
+				Promise.all(pp).then(() => {
+					z1.generateAsync({ type: "blob" }, function updateCallback(metadata) {
+						// console.log("zip progression : ", metadata.percent.toFixed(2), "%");
+					}).then((b) => {
+						saveAs(b, `${pageData.subject}-${filePrefix}.zip`);
+
+						$("#q-number").val(pageData.question = 1 + 1 * $("#q-number").val());
+						$("#tags-holder").empty();
+						pageData.tags = [];
+						pageData.a_caps = [];
+						$('#preview-answer-holder').empty();
+						pageData.q_caps = [];
+						$('#preview-question-holder').empty();
+						pageData.videos = [];
+						$("#preview-video-holder").empty();
+						pageData.a_md = '';
+						$('#a-markdown-text').val('').empty();
+						
+					});
+				});
+			};
+
+			let currentImageQ = null, currentImageA = null;
+
+			let vCanvas = null;
+			let sd_a = {
+				p: 1,
+				r: 0,
+				x: 0,
+				y: 0,
+				w: 100,
+				h: 50,
+				mw: 200,
+				mh: 300
+			};
+			let sd_q = {
+				p: 1,
+				r: 0,
+				x: 0,
+				y: 0,
+				w: 100,
+				h: 50,
+				mw: 200,
+				mh: 300
+			};
+			let _lastQuestionUrl = null;
+			let _lastAnswerUrl = null;
+			
+			function resetCropDataQ(d) {
+				sd_q = {
+					p: 1,
+					r: 0,
+					x: 0,
+					y: 0,
+					w: 100,
+					h: 50,
+					mw: 200,
+					mh: 300
+				};
+				if (d) {
+					sd_q = { ...sd_q, ...d };
+				}
+				$('#adj-r-q').val(sd_q.r);
+
+				$('#adj-x-q').val(sd_q.x);
+				$('#adj-y-q').val(sd_q.y);
+				
+				$('#adj-w-q').val(sd_q.w);
+				$('#adj-h-q').val(sd_q.h);
+			}
+			
+			function resetCropDataA(d) {
+				sd_a = {
+					p: 1,
+					r: 0,
+					x: 0,
+					y: 0,
+					w: 100,
+					h: 50,
+					mw: 200,
+					mh: 300
+				};
+				if (d) {
+					sd_a = { ...sd_a, ...d };
+				}
+				$('#adj-r-a').val(sd_a.r);
+
+				$('#adj-x-a').val(sd_a.x);
+				$('#adj-y-a').val(sd_a.y);
+				
+				$('#adj-w-a').val(sd_a.w);
+				$('#adj-h-a').val(sd_a.h);
+			}
+
+			const previewData = () => {
+				$("#data-summary").text(JSON.stringify(pageData));
+			};
+
+			function remove_a_cap(count) {
+				const pos = count - 1;
+				if (pos < 0) return;
+				if (pos + 1 > pageData.a_caps.length) return;
+
+				pageData.a_caps.splice(pos, 1);
+				const target = document.getElementById(`ap-${count}`);
+				target.parentElement.removeChild(target);
+
+				previewData();
+			}
+
+			function remove_q_cap(count) {
+				const pos = count - 1;
+				if (pos < 0) return;
+				if (pos + 1 > pageData.q_caps.length) return;
+
+				pageData.q_caps.splice(pos, 1);
+				const target = document.getElementById(`qp-${count}`);
+				target.parentElement.removeChild(target);
+
+				previewData();
+			}
+
+			const sync_md = (ele) => {
+				pageData.a_md = ele.value;
+				previewData();
+			};
+
+			const drawTags = () => {
+				let h = "";
+				for (let i = 0; i < pageData.tags.length; i++) {
+					h += `<span id="tag-${i}"> ${pageData.tags[i]} &nbsp; <button onclick="removeTag(${i})">X</button></span>`;
+				}
+				$("#tags-holder").html(h);
+				previewData();
+			};
+
+			const removeTag = (pos) => {
+				pageData.tags.splice(pos, 1);
+				drawTags();
+			};
+
+			const addTag = (inputBox) => {
+				const v = inputBox.value;
+				pageData.tags[pageData.tags.length] = v;
+				inputBox.value = "";
+				drawTags();
+			};
+
+			const removeVideo = (pos) => {
+				pageData.videos.splice(pos, 1);
+				drawVideos();
+			};
+
+			const drawVideos = () => {
+				let h = "";
+				for (let i = 0; i < pageData.videos.length; i++) {
+					const element = pageData.videos[i];
+					h += `<span id="tag-${i}"> ${element} &nbsp; <button onclick="removeVideo(${i})">X</button></span>`;
+				}
+				$("#preview-video-holder").html(h);
+				previewData();
+			};
+
+			const addVideo = (inputBox) => {
+				const v = inputBox.value;
+				pageData.videos[pageData.videos.length] = v;
+				inputBox.value = "";
+				drawVideos();
+			};
+
+			_busy = () => {
+				$("main").attr("aria-busy");
+			};
+
+			_free = () => {
+				$("main").removeAttr("aria-busy");
+			};
+			function selectFolder() {
+				$('#source-selection').hide();
+				const p = $('#local_source_picker');
+				p.show();
+				p.click();
+				$('#local_source_picker').change();
+				// selectSource(document.getElementById('selectSource'));
+			}
+			const baseData =
+				"https://raw.githubusercontent.com/dse-life-data/pastpaper.x/refs/heads/main/base/data.json";
+			let data = {};
+			let source = null;
+
+			const selectSource = (e) => {
+				const v = $(e).val();
+				if(v === 'local') {
+					selectFolder();
+				} else {
+					source = v;
+				}
+				console.log('source changed', source)
+			};
+			const clearSelection = () => {
+				const b = $("#question-selection>option:nth-child(1)").html();
+				$("#question-selection").empty().append(b);
+
+				const u = $("#answer-selection>option:nth-child(1)").html();
+				$("#answer-selection").empty().append(u);
+			};
+			const selectSubject = (e) => {
+				const v = $(e).val();
+				if(!v) {
+					console.log('empty subject', v)
+					return;
+				}
+				pageData.subject = v;
+
+				const files = data.files[v];
+				if (!Array.isArray(files)) {
+					console.log("no data", files, v);
+				}
+				clearSelection();
+				files.forEach((ele) => {
+					const opt = `<option value="${ele}">${ele}</option>`;
+					$("#question-selection").append(opt);
+					$("#answer-selection").append(opt);
+				});
+				previewData();
+			};
+
+			const loadPdfFile = (url, isQuestion) => {
+				module.canopenner.openUrl(url, isQuestion);
+			};
+
+			const selectAnswer = (e) => {
+				_busy();
+				
+				$("main").removeClass("mode_question");
+				$("main").addClass("mode_answer");
+
+				$("#detail-question-preview").removeAttr("open");
+				$("#detail-answer-preview").attr("open");
+
+				const v = String($(e).val());
+				mode_init = false;
+				const url = source + v;
+				_lastAnswerUrl = v;
+				loadPdfFile(url, false);
+				$("#preview-answer-holder").empty();
+				previewData();
+			};
+			const selectQuestion = (e) => {
+				_busy();
+				$("main").removeClass("mode_answer");
+				$("main").addClass("mode_question");
+
+				$("#detail-question-preview").attr("open");
+				$("#detail-answer-preview").removeAttr("open");
+
+				const v = String($(e).val());
+				const url = source + v;
+				_lastQuestionUrl = v;
+				loadPdfFile(url, true);
+				mode_init = false;
+				$("#preview-question-holder").empty();
+
+				const examResult = /(dse|ce|al)/i.exec(v);
+				if(examResult){
+					$('#q-exam').val( examResult[1].toUpperCase() );
+				}
+				const yearPos = v.search(/\d{4}/);
+				if (yearPos) {
+					const yr = v.substr(yearPos, 4);
+					$("#q-year").val(yr);
+					pageData.year = yr;
+				} else {
+					$("#q-year").val("");
+				}
+				const langResult = /\/(chi|eng)\//i.exec(v);
+
+				$("#q-lang>option").removeAttr("selected");
+				if (langResult) {
+					const lang = langResult[1];
+					
+					if (lang == "chi") {
+						$("#q-lang-chi").attr("selected", "selected");
+						pageData.lang = "chi";
+					} else if (lang == "eng") {
+						$("#q-lang-eng").attr("selected", "selected");
+						pageData.lang = "eng";
+					}
+				}
+				const paper = v.match(/\/p([^\.\/]+)/);
+				if (paper) {
+					const p = paper[1].toUpperCase();
+					$("#q-paper").val(p);
+					pageData.paper = p;
+				}
+				previewData();
+
+				pullTags();
+			};
+			const pageInit = () => {
+				if (!data.sources) return;
+
+				for (const key in data.sources) {
+					if (source === null) {
+						source = data.sources[key];
+					}
+					$("#source-selection").append(
+						`<option value="${key}">${key}</option>`
+					);
+				}
+				$("#source-selection").append(
+					`<option value="local" selected="selected">Local File System</option>`
+				);
+				$("#source-selection>option:nth-child(2)").attr("selected", "selected");
+				for (const key in data.sname) {
+					$("#subject-selection").append(
+						`<option value="${key}">${data.sname[key]}</option>`
+					);
+				}
+				// $("#subject-selection>option:nth-child(2)").attr(
+				// 	"selected",
+				// 	"selected"
+				// );
+				$("#source-selection").change();
+				$("#subject-selection").change();
+				
+			};
+		</script>
+		<script type="module">
+			let eCanvas = null,
+				eCtx = null,
+				canvas = null,
+				ctx = null,
+				pdfDocA = null,
+				pdfDocQ = null,
+				pageRendering = false,
+				pageNumPending = null;
+				
+			function initEditCanvas() {
+				if (!eCanvas) {
+					eCanvas = document.getElementById("edit-canvas");
+					eCtx = eCanvas.getContext("2d");
+				} else {
+					eCtx = eCanvas.getContext("2d");
+					eCtx.clearRect(0, 0, eCanvas.width, eCanvas.height);
+				}
+			}
+			// PDF
+			let _drawing = false;
+			let _drawPending = false;
+
+			function redrawPage(isQuestion) {
+				if (isQuestion && !currentImageQ) return;
+				if (!isQuestion && !currentImageA) return;
+
+				if (_drawing) {
+					_drawPending = true;
+					return;
+				}
+
+				_drawing = true;
+
+				const eCanvas = isQuestion ? document.getElementById("question-edit-canvas") : document.getElementById("answer-edit-canvas");
+				const eCtx = eCanvas.getContext("2d");
+				const sd = isQuestion ? sd_q : sd_a;
+
+				eCtx.canvas.width = sd.w;
+				eCtx.canvas.height = sd.h;
+
+				eCtx.translate(sd.w / 2, sd.h / 2);
+				const angleInRadians = (sd.r * Math.PI) / 180;
+				eCtx.rotate(angleInRadians);
+				eCtx.drawImage(isQuestion ? currentImageQ : currentImageA, -sd.x - sd.w / 2, -sd.y - sd.h / 2);
+				eCtx.restore();
+
+				_drawing = false;
+				if (_drawPending) {
+					_drawPending = false;
+					redrawPage(isQuestion);
+				}
+			}
+
+			function _syncSdQ() {
+				const x = document.getElementById("adj-x-q");
+				x.value = sd_q.x;
+				x.min = 0;
+				x.max = sd_q.w;
+
+				const y = document.getElementById("adj-y-q");
+				y.value = sd_q.y;
+				y.min = 0;
+				y.max = sd_q.h;
+
+				const w = document.getElementById("adj-w-q");
+				w.value = sd_q.w;
+				w.min = 0;
+				w.max = sd_q.w;
+
+				const h = document.getElementById("adj-h-q");
+				h.value = sd_q.h;
+				h.min = 0;
+				h.max = sd_q.h;
+
+				const r = document.getElementById("adj-r-q");
+				r.value = sd_q.r;
+			}
+			
+			function _syncSdA() {
+				const x = document.getElementById("adj-x-a");
+				x.value = sd_a.x;
+				x.min = 0;
+				x.max = sd_a.w;
+
+				const y = document.getElementById("adj-y-a");
+				y.value = sd_a.y;
+				y.min = 0;
+				y.max = sd_a.h;
+
+				const w = document.getElementById("adj-w-a");
+				w.value = sd_a.w;
+				w.min = 0;
+				w.max = sd_a.w;
+
+				const h = document.getElementById("adj-h-a");
+				h.value = sd_a.h;
+				h.min = 0;
+				h.max = sd_a.h;
+
+				const r = document.getElementById("adj-r-a");
+				r.value = sd_a.r;
+			}
+
+			function storeOrigResolution(sd_a) {
+				return {...sd_a,
+					x: sd_a.x / 2,
+					y: sd_a.y / 2,
+					w: sd_a.w / 2,
+					h: sd_a.h / 2,
+					mw: sd_a.mw / 2,
+					mh: sd_a.mh / 2
+				}
+			}
+
+			function cropAnswer() {
+				pageData.a_caps[pageData.a_caps.length] = storeOrigResolution(sd_a);
+				const count = pageData.a_caps.length;
+				const canvas_id = `ap-${count}`;
+
+				$("#detail-answer-preview").attr("open", true);
+				$("#preview-answer-holder").append(
+					`<canvas id="${canvas_id}" width="${sd_a.w}" height="${sd_a.h}" onclick="remove_a_cap(${count})"></canvas>`
+				);
+
+				const tmpCanvas = document.getElementById(canvas_id);
+
+				const tCtx = tmpCanvas.getContext("2d");
+				tCtx.canvas.width = sd_a.w;
+				tCtx.canvas.height = sd_a.h;
+
+				tCtx.translate(sd_a.w / 2, sd_a.h / 2);
+				const angleInRadians = (sd_a.r * Math.PI) / 180;
+				tCtx.rotate(angleInRadians);
+				tCtx.drawImage( currentImageA , -sd_a.x - sd_a.w / 2, -sd_a.y - sd_a.h / 2);
+				tCtx.restore();
+
+				resetCropDataA({
+					p: sd_a.p,
+					r: sd_a.r,
+					x: sd_a.x, 
+					y: sd_a.y + sd_a.h, 
+					mw: sd_a.mw,
+					mh: sd_a.mh,
+					w: sd_a.w,
+					h: sd_a.h
+				});
+				redrawPage();
+
+				previewData();
+			}
+
+
+			function cropQuestion() {
+				pageData.q_caps[pageData.q_caps.length] = storeOrigResolution(sd_q);
+
+				const count = pageData.q_caps.length;
+
+				const canvas_id = `qp-${count}`;
+
+				$("#detail-question-preview").attr("open", true);
+				$("#preview-question-holder").append(
+					`<canvas id="${canvas_id}" onclick="remove_q_cap(${count})" width="${sd_q.w}" height="${sd_q.h}"></canvas>`
+				);
+
+				const tmpCanvas = document.getElementById(canvas_id);
+				tmpCanvas.onclick = () => {
+					remove_q_cap(count);
+				};
+				tmpCanvas.width = sd_q.w;
+				tmpCanvas.height = sd_q.h;
+
+				const tCtx = tmpCanvas.getContext("2d");
+				tCtx.canvas.width = sd_q.w;
+				tCtx.canvas.height = sd_q.h;
+
+				tCtx.translate(sd_q.w / 2, sd_q.h / 2);
+				const angleInRadians = (sd_q.r * Math.PI) / 180;
+				tCtx.rotate(angleInRadians);
+				tCtx.drawImage(currentImageQ, -sd_q.x - sd_q.w / 2, -sd_q.y - sd_q.h / 2);
+				tCtx.restore();
+
+				resetCropDataQ({
+					p: sd_q.p,
+					r: sd_q.r,
+					x: sd_q.x, 
+					y: sd_q.y + sd_q.h, 
+					mw: sd_q.mw,
+					mh: sd_q.mh,
+					w: sd_q.w,
+					h: sd_q.h
+				});
+				redrawPage(true);
+
+				previewData();
+			}
+
+			let { pdfjsLib } = globalThis;
+			pdfjsLib.GlobalWorkerOptions.workerSrc = "scripts/p.w.js";
+
+			const renderPage = (num, isQuestion) => {
+				const pdfDoc = isQuestion ? pdfDocQ : pdfDocA;
+
+				if (!pdfDoc) {
+					console.error("Pdf Doc not ready");
+					return;
+				}
+				if (pageRendering) {
+					console.log("no double rendering, please wait");
+					return;
+				}
+				pageRendering = true;
+
+				_busy();
+
+				pdfDoc.getPage(num).then(function (page) {
+					let viewport = page.getViewport({ scale: 2 });
+					if(isQuestion) {
+						resetCropDataQ({ p: num });
+					} else {
+						resetCropDataA({ p: num });
+					}
+
+					const canvas = new OffscreenCanvas(viewport.width,viewport.height)
+					const ctx = canvas.getContext('2d');
+
+					const sd = isQuestion ? sd_q : sd_a;
+
+					sd.mw = viewport.width;
+					sd.mh = viewport.height;
+
+					sd.w = sd.mw;
+					sd.h = sd.mh;
+					sd.x = 0;
+					sd.y = 0;
+					
+					let fixed = false;
+					if(mode_init === false) {
+						mode_init = true;
+						if(isQuestion){
+							if(pageData.q_caps.length > 0){
+								fixed = true;
+								const last = pageData.q_caps[pageData.q_caps.length-1];
+								resetCropDataQ({
+									p: last.p,
+									r: last.r,
+									x: last.x, 
+									y: last.y + last.h,
+								});
+							}
+							pageData.q_file = _lastQuestionUrl;
+							pageData.q_caps = [];
+						} else {
+							if(pageData.a_caps.length > 0){
+								fixed = true;
+								const last = pageData.a_caps[pageData.a_caps.length-1];
+								resetCropDataA({
+									p: last.p,
+									r: last.r,
+									x: last.x, 
+									y: last.y + last.h,
+								});
+							}
+							
+							pageData.a_file = _lastAnswerUrl;
+							pageData.a_caps = [];
+						}
+					}
+					isQuestion? _syncSdQ():_syncSdA();
+
+					// Render PDF page into canvas context
+					let renderContext = {
+						canvasContext: ctx,
+						viewport: viewport
+					};
+					const _thhold = 120;
+
+					let renderTask = page.render(renderContext);
+					// Wait for rendering to finish
+					renderTask.promise.then(function () {
+						pageRendering = false;
+
+						if(!fixed) {
+							const _vw = 200;
+							const ratio = _vw / sd.mw;
+							const topLimit = sd.mh * 0.2 * ratio
+							const sideLimit = sd.mw * 0.4 * ratio;
+							const _mw = _vw;
+							const _mh = sd.mh / sd.mw * _vw;
+
+							const _canvas = new OffscreenCanvas(_mw, _mh);
+
+							const _cx = _canvas.getContext('2d');
+							_cx.drawImage(canvas, 0, 0, _mw, _mh);
+
+							for(let y = 0; y < topLimit; y++){
+								const line = _cx.getImageData(0, y, _mw, 1);
+								let cc = 0;
+								let r, g, b = 0
+								for(let x = 0; x < _mw * 4; x += 4 ){
+									r = line.data[x];
+									g = line.data[x+1];
+									b = line.data[x+2];
+									if(r<_thhold && g<_thhold && b<_thhold) cc++;
+								}
+								if(cc > 2){
+									sd.y = y / ratio - sd.mh * 0.02;
+									$('#adj-y').val(sd.y);
+									sd.h = sd.mh * 0.9 - sd.y;
+									$('#adj-h').val(sd.h);
+									break;
+								}
+							}
+							let _l = 0, _r = 0;
+							for(let x = 3; x<sideLimit; x++){
+								let line_l = _l ? null : _cx.getImageData(x, 0, 1, _mh);
+								let line_r = _r ? null : _cx.getImageData(_mw - x, 0, 1, _mh);
+								let cc_l = 0;
+								let r_l, g_l, b_l = 0;
+								let cc_r = 0;
+								let r_r, g_r, b_r = 0;
+
+								for(let y = 0; y < (_mh-1) * 4; y += 4){
+									if(!_l){					
+										r_l = line_l.data[y];
+										g_l = line_l.data[y+1];
+										b_l = line_l.data[y+2];
+										if(r_l<_thhold && g_l<_thhold && b_l<_thhold) 
+											cc_l++;
+									}
+									if(!_r){					
+										r_r = line_r.data[y];
+										g_r = line_r.data[y+1];
+										b_r = line_r.data[y+2];
+										
+										if(r_r<_thhold && g_r<_thhold && b_r<_thhold) 
+											cc_r++;
+									}
+								}
+								if(!_l && cc_l > 3){
+									_l = x / ratio;
+								}
+								if(!_r && cc_r > 1){
+									_r = x / ratio;
+								}
+							}
+								// console.log('o', _l , _r);
+							if(!_l) _l = sideLimit / ratio;
+							if(!_r) _r = sideLimit / ratio;
+							
+							sd.x = Math.max( _l - 0.02*sd.mw, 1);
+							$('#adj-x-' + (isQuestion ? 'q' : 'a')).val(sd.x);
+							sd.w = Math.min(sd.mw - _r - _l + 0.04 * sd.mw, sd.mw);
+							// console.log("L", _l, "R", _r, "W", sd.mw)
+							$('#adj-w-' + (isQuestion ? 'q' : 'a')).val(sd.w);
+						}
+						const img = new Image();
+						img.onload = () => {
+							
+							if(isQuestion) {
+								currentImageQ = img
+							} else {
+								currentImageA = img;
+							}
+							_free();
+							document.getElementById(isQuestion ? "page_num-q" : "page_num-a").textContent = num;
+
+							pageRendering = false;
+
+							if (
+								pageNumPending !== null &&
+								pageNumPending > 0 &&
+								pageNumPending <= pdfDoc.numPages
+							) {
+								// New page rendering is pending
+								renderPage(pageNumPending, isQuestion);
+								pageNumPending = null;
+							} else {
+								// no more pending
+
+								redrawPage(isQuestion);
+							}
+						};
+						
+						canvas.convertToBlob().then((b)=>{
+							img.src = URL.createObjectURL(b);
+						});
+					});
+				});
+			};
+
+			let queueRenderPage = (num, isQuestion) => {
+				if(isQuestion === undefined) isQuestion = $("main").hasClass("mode_question");
+				if (pageRendering) {
+					pageNumPending = num;
+				} else {
+					renderPage(num, isQuestion);
+				}
+			};
+			
+			function onPrevPageQ() {
+				if (sd_q.p <= 1) {
+					return;
+				}
+				sd_q.p--;
+				queueRenderPage(sd_q.p, true);
+			}
+			function onNextPageQ() {
+				if (sd_q.p >= pdfDocQ.numPages) {
+					return;
+				}
+				sd_q.p++;
+				queueRenderPage(sd_q.p, true);
+			}
+
+			function onPrevPageA() {
+				if (sd_a.p <= 1) {
+					return;
+				}
+				sd_a.p--;
+				queueRenderPage(sd_a.p, false);
+			}
+			function onNextPageA() {
+				if (sd_a.p >= pdfDocA.numPages) {
+					return;
+				}
+				sd_a.p++;
+				queueRenderPage(sd_a.p, false);
+			}
+
+			let _buttonsInitFlag = false;
+
+			const buttonsInit = () => {
+				document.getElementById("q-lang").addEventListener("input", (event) => {
+					pageData.lang = event.target.value;
+					previewData();
+				});
+				document.getElementById("q-year").addEventListener("input", (event) => {
+					pageData.year = event.target.value;
+					previewData();
+				});
+				document
+					.getElementById("q-paper")
+					.addEventListener("input", (event) => {
+						pageData.paper = event.target.value;
+						previewData();
+					});
+				document
+					.getElementById("q-section")
+					.addEventListener("input", (event) => {
+						event.target.value = event.target.value.toUpperCase();
+						pageData.section = event.target.value;
+						previewData();
+					});
+				document
+					.getElementById("q-number")
+					.addEventListener("input", (event) => {
+						pageData.question = event.target.value;
+						previewData();
+					});
+
+				document.getElementById("adj-x-a").addEventListener("input", (event) => {
+					sd_a.x = 1*event.target.value;
+					redrawPage(false);
+				});
+				document.getElementById("adj-y-a").addEventListener("input", (event) => {
+					sd_a.y = 1*event.target.value;
+					redrawPage(false);
+				});
+				document.getElementById("adj-w-a").addEventListener("input", (event) => {
+					sd_a.w = 1*event.target.value;
+					redrawPage(false);
+				});
+				document.getElementById("adj-h-a").addEventListener("input", (event) => {
+					sd_a.h = 1*event.target.value;
+					redrawPage(false);
+				});
+				document.getElementById("adj-r-a").addEventListener("input", (event) => {
+					sd_a.r = 1*event.target.value;
+					redrawPage(false);
+				});
+				
+				document.getElementById("adj-x-q").addEventListener("input", (event) => {
+					sd_q.x = 1*event.target.value;
+					redrawPage(true);
+				});
+				document.getElementById("adj-y-q").addEventListener("input", (event) => {
+					sd_q.y = 1*event.target.value;
+					redrawPage(true);
+				});
+				document.getElementById("adj-w-q").addEventListener("input", (event) => {
+					sd_q.w = 1*event.target.value;
+					redrawPage(true);
+				});
+				document.getElementById("adj-h-q").addEventListener("input", (event) => {
+					sd_q.h = 1*event.target.value;
+					redrawPage(true);
+				});
+				document.getElementById("adj-r-q").addEventListener("input", (event) => {
+					sd_q.r = 1*event.target.value;
+					redrawPage(true);
+				});
+
+				const autocompleteInput = document.getElementById("tag-input");
+				const autocompleteResults = document.getElementById(
+					"tag-input-autocomplete"
+				);
+				autocompleteInput.addEventListener("input", (e) => {
+					let cv = String(e.target.value).toLowerCase();
+					// console.log('cv',cv, 'subTags', subTags)
+					autocompleteResults.innerHTML = "";
+					if (cv.length > 0 && subTags && subTags.length > 0) {
+						cv = cv.replace(/^\s+|\s+$/g, '');
+						console.log(cv,cv.length)
+						const fr = (cv.length < 1) ? subTags.toSorted() : subTags.filter((item) =>
+							item.toLowerCase().includes(cv)
+						).toSorted() ;
+						if (fr.length > 0) {
+							console.log(fr)
+							fr.forEach((item) => {
+								const listItem = document.createElement("li");
+								listItem.textContent = item;
+								autocompleteResults.appendChild(listItem);
+							});
+						}
+					}
+				});
+				autocompleteResults.addEventListener("click", function (event) {
+					if (event.target.tagName === "LI") {
+						autocompleteInput.value = event.target.textContent;
+						autocompleteResults.innerHTML = "";
+					}
+				});
+			};
+
+			module.canopenner = {
+				init: () => {
+					if (!_buttonsInitFlag) {
+						buttonsInit();
+						_buttonsInitFlag = true;
+					}
+					document.getElementById("prev-q").addEventListener("click", onPrevPageQ);
+					document.getElementById("next-q").addEventListener("click", onNextPageQ);
+					document.getElementById("prev-a").addEventListener("click", onPrevPageA);
+					document.getElementById("next-a").addEventListener("click", onNextPageA);
+					document
+						.getElementById("crop-it")
+						.addEventListener("click", cropQuestion);
+					document
+						.getElementById("crop-ans")
+						.addEventListener("click", cropAnswer);
+				},
+				openUrl: (u, isQuestion) => {
+					_busy();
+
+					let loadingTask = pdfjsLib.getDocument({ url: u });
+
+					loadingTask.promise.then(
+						function (pdf) {
+							if(isQuestion){
+								pdfDocQ = pdf
+							} else {
+								pdfDocA = pdf
+							}
+							$(isQuestion ? "#page_count-q" : "#page_count-a").text(pdf.numPages);
+
+							let initPage = 1;
+							if(mode_init === false) {
+								if(isQuestion){
+									if(pageData.q_caps.length > 0){
+										const last = pageData.q_caps[pageData.q_caps.length-1];
+										initPage = last.p;
+									}
+								} else {
+									if(pageData.a_caps.length > 0){
+										const last = pageData.a_caps[pageData.a_caps.length-1];
+										initPage = last.p;
+									}
+								}
+							}
+							
+							queueRenderPage(initPage, isQuestion);
+							$("#pdf-info").show();
+						},
+						function (reason) {
+							// PDF loading error
+							console.error("load error", reason);
+							_free();
+						}
+					);
+				}
+			};
+		</script>
+		<script>
+			window.onload = () => {
+				$.getJSON(baseData, (d) => {
+					data = d;
+					module.canopenner.init();
+					pageInit();
+					_free();
+				});
+			};
+		</script>
+		<link rel="stylesheet" href="css/pico.css" />
+		<style>
+			canvas {
+				min-width: 100px;
+				min-height: 50px;
+				margin: 5px;
+				display: block;
+			}
+			body {
+				min-height: 100vh;
+				margin: 0;
+				position: absolute;
+			}
+
+			header {
+				min-height: 80px;
+				max-height: 100px;
+			}
+
+			footer {
+				min-height: 10px;
+				max-height: 70px;
+			}
+
+			body {
+				display: flex;
+				flex-direction: column;
+			}
+			main {
+				width: 100vw;
+				flex: 1;
+				overflow: auto;
+				/* max-height: calc(100vh - 180px); */
+			}
+			/* [aria-busy] button {
+				display: none;
+			} */
+			.target_mode {
+				display: none;
+			}
+			.mode_question .target_mode.question {
+				display: inline;
+			}
+			#crop-it {
+				display: inline;
+			}
+			#crop-ans {
+				display: inline;
+			}
+			.mode_answer .target_mode.answer {
+				display: inline;
+			}
+			#tag-input-autocomplete {
+				position: absolute;
+				z-index: 1;
+				margin-top: 40px;
+				margin-left: 10px;
+				padding-right: 30px;
+				background-color: darkslategray;
+			}
+			.canvasholder{
+				width: 100vw;
+				left: 0;
+				margin: auto;
+			}
+			#data-summary {
+				max-width: 88%;
+			}
+		</style>
+	</head>
+	<body>
+		<main aria-busy="true" class="">
+			<div style="display: flex; flex-direction: row;">
+				<label style="flex: 1;" for="adv_txt">adv.txt Google</label>
+				<input style="flex: 4;" type="text" name="adv_txt" id="adv_txt" value="google.com, pub-9545076119295103, DIRECT, f08c47fec0942fa0" />
+				
+				<label style="flex: 1;" for="adv_slot">slot id</label>
+				<input style="flex: 4;" type="text" name="adv_slot" id="adv_slot" value="" />
+			</div>
+			<div class="grid">
+				<div>
+					<label>
+						Source
+						<select
+							id="source-selection"
+							onchange="selectSource(this)"
+							aria-label="Select your data source..."
+						>
+							<option selected disabled value="">
+								Select your data source...
+							</option>
+						</select>
+						<input id="local_source_picker" type="text" value="//localhost:5000/static/pp/" onchange="selectSource(this)" style="display: none;" />
+					</label>
+				</div>
+				<div>
+					<lable>
+						Subject
+						<select
+							id="subject-selection"
+							onchange="selectSubject(this)"
+							aria-label="Select subject..."
+						>
+							<option selected disabled value=""> Select subject... </option>
+						</select>
+					</lable>
+				</div>
+			</div>
+
+			<div class="grid">
+				<div style="display: flex; flex-direction: row">
+					<lable style="flex: 8">
+						Question File
+						<select
+							id="question-selection"
+							onchange="selectQuestion(this)"
+							aria-label="Select question..."
+						>
+							<option selected disabled value=""> Select question... </option>
+						</select>
+					</lable>
+					<button
+						style="flex: 1"
+						type="button"
+						onclick="selectQuestion(document.getElementById('question-selection'))"
+						>Load</button
+					> </div
+				><div style="display: flex; flex-direction: row">
+					<lable style="flex: 8">
+						Answer File
+						<select
+							id="answer-selection"
+							onchange="selectAnswer(this)"
+							aria-label="Select answer..."
+						>
+							<option selected disabled value=""> Select answer... </option>
+						</select>
+					</lable>
+					<button
+						style="flex: 1"
+						type="button"
+						onclick="selectAnswer(document.getElementById('answer-selection'))"
+						>Load</button
+					>
+				</div>
+			</div>
+			<div class="grid">
+				<div>
+					<label
+						>Exam
+						<input
+							title="Exam"
+							id="q-exam"
+							type="text"
+							alt="Exam"
+							placeholder="Exam" /></label></div
+				>
+				<div>
+					<label
+						>Year
+						<input
+							title="Year"
+							id="q-year"
+							type="text"
+							alt="Year"
+							placeholder="Year" /></label></div
+				><div>
+					<label
+						>Lang
+						<select name="q-lang" id="q-lang">
+							<option id="q-lang-na" value="">N/A</option>
+							<option id="q-lang-chi" value="chi">中文</option>
+							<option id="q-lang-eng" value="eng">Eng</option>
+						</select></label
+					></div
+				><div>
+					<label
+						>Paper
+						<input
+							title="Paper"
+							id="q-paper"
+							type="text"
+							alt="Paper"
+							placeholder="Paper" /></label></div
+				><div>
+					<label
+						>Section
+						<input
+							title="Section"
+							id="q-section"
+							type="text"
+							alt="Section"
+							placeholder="Section" /></label></div
+				><div>
+					<label
+						>Question
+						<input
+							title="Question#"
+							id="q-number"
+							type="text"
+							alt="Question#"
+							placeholder="Question#"
+					/></label>
+				</div>
+			</div>
+			<details id="detail-tags" open>
+				<summary role="button" class="">Tags</summary>
+				<div id="tags-current">
+					<div style="display: flex; flex-direction: row">
+						<ul id="tag-input-autocomplete"></ul>
+						<input
+							style="flex: 5; margin-right: 10px"
+							title="Tag"
+							alt="Tag"
+							placeholder="Tag (always reuse existing tag, if any)"
+							id="tag-input"
+						/>
+						<button
+							style="flex: 1"
+							type="button"
+							onclick="addTag(document.getElementById('tag-input'))"
+							>Add</button
+						>
+					</div>
+					<div id="tags-holder"></div>
+				</div>
+			</details>
+			<details id="detail-question-preview">
+				<summary role="button" class="">Qusetion Preview</summary>
+				<div id="preview-question-holder"> no question yet </div>
+			</details>
+
+			<details id="detail-answer-preview">
+				<summary role="button" class="">Answer Preview</summary>
+				<div id="preview-answer-holder"> no answer yet </div>
+			</details>
+
+			<details id="detail-video">
+				<summary role="button" onclick="syncVideoKeyword()" class="secondary"
+					>Youtube / Video links</summary
+				>
+				<div>
+					<div
+						><input
+							type="text"
+							id="video-keyword"
+							onfocus="try{navigator.clipboard.writeText(this.value);}catch(e){console.log('clipboardnot support', e)}"
+					/></div>
+					<div style="display: flex; flex-direction: row">
+						<input
+							style="flex: 5; margin-right: 10px"
+							title="Video Link"
+							alt="Video Link"
+							placeholder="Video Link"
+							id="video-link"
+						/>
+						<button
+							style="flex: 1"
+							type="button"
+							onclick="addVideo(document.getElementById('video-link'))"
+							>Add</button
+						>
+					</div>
+					<div id="preview-video-holder"> </div>
+				</div>
+			</details>
+
+			<details id="detail-markdown">
+				<summary role="button" class="secondary">Answer (Markdown)</summary>
+				<textarea
+					id="a-markdown-text"
+					placeholder="paste your content here"
+					oninput="sync_md(this)"
+				></textarea>
+			</details>
+			<div class="grid">
+				<div>
+					Mode:
+					<span class="target_mode question" id="target_mode_question">
+						Question
+					</span>
+					<span class="target_mode answer" id="target_mode_answer">
+						Answer
+					</span>
+				</div>
+				<button style="padding: 50px 100px; font-size: 60px; font-weight: bolder;" type="button" onclick="saveZipData()"> Save </button>
+			</div>
+
+			<div style="display: flex; flex-direction: row;">
+				<div style="flex: 1; margin: 10px;">
+					<div style="display: flex; flex-direction: row;">
+						<button style="flex: 1; margin: 10px;" type="button" id="prev-q">Prev P</button>
+						<div style="flex: 1; text-align: center; ">
+							<span id="page_num-q">0</span> / <span id="page_count-q">0</span>
+						</div>
+						<button style="flex: 1;  margin: 10px" type="button" id="next-q">Next P</button>
+						<label style="flex: 1;  margin: 10px" >
+							R
+							<input type="range" id="adj-r-q" step="0.1" min="-5" max="5" />
+						</label>
+					</div>
+						<br/>
+					<div style="display: flex; flex-direction: row;">
+						<label style="flex: 1;  margin: 10px" >
+							L
+							<input type="range" id="adj-x-q" step="1" />
+						</label>
+						<label style="flex: 1; margin: 10px" >
+							W
+							<input type="range" id="adj-w-q" step="1" />
+						</label>
+						<label style="flex: 1; margin: 10px" >
+							T
+							<input type="range" id="adj-y-q" step="1" />
+						</label>
+						<label style="flex: 1; margin: 10px" >
+							H
+							<input type="range" id="adj-h-q" step="1" />
+						</label>
+					</div>
+					<br/>
+					
+					<button style="width: 90%; margin: auto;" type="button" id="crop-it">Crop Question</button>
+				</div>
+				
+				
+				<div style="flex: 1; margin: 10px;">
+					<div style="display: flex; flex-direction: row;">
+						<button style="flex: 1; margin: 10px;" type="button" id="prev-a">Prev P</button>
+						<div style="flex: 1; text-align: center;">
+							<span id="page_num-a">0</span> / <span id="page_count-a">0</span>
+						</div>
+						<button style="flex: 1; margin: 10px" type="button" id="next-a">Next P</button>
+						<label style="flex: 1;  margin: 10px" >
+							R
+							<input type="range" id="adj-r-a" step="0.1" min="-5" max="5" />
+						</label>
+					</div>
+						<br/>
+					<div style="display: flex; flex-direction: row;">
+						<label style="flex: 1;  margin: 10px" >
+							L
+							<input type="range" id="adj-x-a" step="1" />
+						</label>
+						<label style="flex: 1; margin: 10px" >
+							W
+							<input type="range" id="adj-w-a" step="1" />
+						</label>
+						<label style="flex: 1; margin: 10px" >
+							T
+							<input type="range" id="adj-y-a" step="1" />
+						</label>
+						<label style="flex: 1; margin: 10px" >
+							H
+							<input type="range" id="adj-h-a" step="1" />
+						</label>
+					</div>
+					<br/>
+					
+					<button style="width: 90%; margin: auto;" type="button" id="crop-ans">Crop Answer</button>
+				</div>
+			
+			</div>
+			<div class="canvasholder" style="display: flex; flex-direction: row; min-height: 100vh;">
+				
+				<div id="question-canvas" style="flex: 8">
+					Question
+					<canvas id="question-edit-canvas"></canvas>
+				</div>
+				<div id="answer-canvas" style="flex: 8">
+					Answer
+					<canvas id="answer-edit-canvas"></canvas>
+				</div>
+			</div>
+			<div ></div>
+			<div>Any comment and feature request of this editor can post to <a href="https://github.com/dse-life-data/pastpaper.x/issues" target="_blank" >GitHub Issue</a></div>
+		</main>
+	</body>
+</html>
